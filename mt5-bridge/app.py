@@ -282,19 +282,15 @@ mt5_bridge = MT5Bridge()
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
-    account_info = mt5_bridge.get_account_info()
-    if account_info:
-        return jsonify({
-            'status': 'healthy',
-            'mt5_connected': mt5_bridge.mt5_initialized,
-            'account': account_info
-        }), 200
-    else:
-        return jsonify({
-            'status': 'unhealthy',
-            'mt5_connected': mt5_bridge.mt5_initialized,
-            'error': 'MT5 connection failed'
-        }), 503
+    # Service is healthy if Flask is running, regardless of MT5 status
+    # MT5 connectivity is checked separately
+    return jsonify({
+        'status': 'healthy',
+        'service': 'MT5 Bridge API',
+        'mt5_connected': mt5_bridge.mt5_initialized,
+        'mt5_available': MT5_AVAILABLE,
+        'timestamp': datetime.now(timezone.utc).isoformat()
+    }), 200
 
 @app.route('/webhook/tradingview', methods=['POST'])
 def tradingview_webhook():

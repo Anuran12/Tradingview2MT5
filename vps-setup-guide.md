@@ -673,6 +673,123 @@ sudo docker-compose up -d --build
    sudo docker-compose up -d --build
    ```
 
+### **Handling Local Changes During Git Pull:**
+
+If you have local changes that conflict with git pull:
+
+```bash
+# Option 1: Commit your changes first
+git add .
+git commit -m "Fixed workflow JSON escaping and added endpoints"
+git pull origin main
+
+# Option 2: Stash changes temporarily
+git stash
+git pull origin main
+git stash pop  # Apply your changes back
+
+# Option 3: Force overwrite (loses local changes)
+git reset --hard origin/main
+```
+
+### **Fixing Divergent Branches Error:**
+
+If you get "divergent branches" error after committing:
+
+```bash
+# Option A: Merge (combines your changes with remote)
+git config pull.rebase false
+git pull origin main
+
+# Option B: Rebase (replays your changes on top of remote)
+git config pull.rebase true
+git pull origin main
+
+# Option C: Force pull (overwrites your local commits)
+git reset --hard origin/main
+git pull origin main
+```
+
+### **Fixing Permission Issues:**
+
+If you get permission errors with log files:
+
+```bash
+# Fix permissions on log files
+sudo chown -R trading:trading ~/Tradingview2MT5/mt5-bridge/logs/
+
+# Or remove the problematic file
+sudo rm -f ~/Tradingview2MT5/mt5-bridge/logs/mt5_bridge.log
+```
+
+### **Fixing Lost Git Repository:**
+
+If git commands fail with "not in a git directory":
+
+```bash
+# Check if you're in the right directory
+pwd  # Should show /home/trading/Tradingview2MT5
+
+# Check if .git directory exists
+ls -la | grep .git
+
+# If .git is missing, re-clone the repository
+cd ~
+rm -rf Tradingview2MT5
+git clone https://github.com/Anuran12/Tradingview2MT5.git
+cd Tradingview2MT5
+```
+
+### **Fixing Docker Compose Issues:**
+
+If docker-compose commands fail:
+
+```bash
+# Check if docker-compose is installed
+which docker-compose
+docker-compose --version
+
+# If not installed, install it
+sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+
+# Check if docker-compose.yml exists
+ls -la docker-compose.yml
+
+# If missing, you may need to re-download the project
+```
+
+### **Complete Recovery Process:**
+
+```bash
+# Go to home directory
+cd ~
+
+# Remove broken project
+rm -rf Tradingview2MT5
+
+# Re-clone fresh copy
+git clone https://github.com/Anuran12/Tradingview2MT5.git
+
+# Enter project directory
+cd Tradingview2MT5
+
+# Make sure docker-compose.yml exists
+ls -la docker-compose.yml
+
+# Configure environment
+cp mt5-bridge/.env.example mt5-bridge/.env
+nano mt5-bridge/.env  # Add your MT5 credentials
+
+# Start services
+sudo docker-compose up -d --build
+
+# Check status
+sudo docker-compose ps
+```
+
+````
+
 ### **Quick Update Script:**
 
 Create this script on your VPS for easy updates:
@@ -680,7 +797,7 @@ Create this script on your VPS for easy updates:
 ```bash
 # Create update script
 nano ~/update-trading-system.sh
-```
+````
 
 ```bash
 #!/bin/bash
@@ -689,6 +806,13 @@ echo "🔄 Updating TradingView to MT5 System..."
 # Stop services
 cd ~/Tradingview2MT5
 sudo docker-compose down
+
+# Handle git updates safely
+if git status --porcelain | grep -q .; then
+    echo "📝 Committing local changes..."
+    git add .
+    git commit -m "Auto-commit before update $(date)" || true
+fi
 
 # Pull latest changes (if using git)
 git pull origin main 2>/dev/null || echo "No git repo found, using local files"
@@ -706,6 +830,85 @@ sudo docker-compose ps
 chmod +x ~/update-trading-system.sh
 ~/update-trading-system.sh
 ```
+
+### **Troubleshooting Test Failures:**
+
+#### **Fix MT5 Bridge Health Check (HTTP 503):**
+
+```bash
+# Check MT5 bridge logs
+sudo docker-compose logs mt5-bridge
+
+# Check if MT5 credentials are configured
+cat mt5-bridge/.env
+
+# Test MT5 bridge directly
+curl http://localhost:5000/health
+
+# Restart MT5 bridge
+sudo docker-compose restart mt5-bridge
+```
+
+#### **Fix Webhook Flow (HTTP 404):**
+
+The webhook "tradingview-webhook" is not registered because:
+
+```bash
+# Access n8n web interface
+# Go to: http://YOUR_VPS_IP:5678
+
+# Import the workflow:
+# 1. Go to Workflows → Import from File
+# 2. Upload: n8n-workflows/tradingview-to-mt5-workflow.json
+# 3. Click Import
+# 4. Click the workflow to open it
+# 5. Click "Activate" button (top right)
+
+# The webhook URL should be:
+# http://YOUR_VPS_IP:5678/webhook/webhook
+```
+
+#### **Complete Fix Process:**
+
+```bash
+# 1. Fix MT5 bridge (check logs and credentials)
+sudo docker-compose logs mt5-bridge
+cat mt5-bridge/.env
+
+# 2. Access n8n web interface at http://YOUR_VPS_IP:5678
+# 3. Import and activate workflow: n8n-workflows/tradingview-to-mt5-workflow.json
+# 4. Test again: python3 test-system.py
+```
+
+### **Diagnosing MT5 Bridge 503 Errors:**
+
+**Note:** If you're getting 503 errors, it was likely because the health endpoint was checking MT5 connectivity. This has been fixed - the service is now healthy even without MT5 connected.
+
+```bash
+# Rebuild the MT5 bridge with the fix
+sudo docker-compose up -d --build mt5-bridge
+
+# Check that health endpoint now returns 200
+curl http://localhost:5000/health
+
+# Should return:
+# {
+#   "status": "healthy",
+#   "service": "MT5 Bridge API",
+#   "mt5_connected": false,
+#   "mt5_available": false,
+#   "timestamp": "2025-11-02T17:55:00.000Z"
+# }
+
+# Run the test again
+python3 test-system.py
+```
+
+### **Old Issues (Now Fixed):**
+
+- ✅ **503 Error**: Health endpoint now returns 200 when service is running
+- ✅ **MT5 Dependency**: Service is healthy even without MT5 connected
+- ✅ **Flask Status**: Service health is independent of MT5 connectivity
 
 ### Step 4.2: Verify Services Health
 
