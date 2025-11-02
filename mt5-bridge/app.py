@@ -59,30 +59,41 @@ class MT5Bridge:
     def initialize_mt5(self):
         """Initialize MT5 connection"""
         if not MT5_AVAILABLE:
-            logger.warning("MetaTrader5 package not available in container. "
-                          "Make sure MT5 terminal is running on the host system with API access enabled.")
-            # For now, we'll assume MT5 is running and available via network
-            # In production, you might want to implement a TCP/IP connection to host MT5
+            logger.warning("MetaTrader5 package not available. "
+                          "Install with: pip install MetaTrader5")
             self.mt5_initialized = False
             return False
 
         try:
-            # Initialize MT5
+            # Try to initialize MT5 connection
+            # Note: MT5 terminal must be running on the same system
             if not mt5.initialize(path=self.mt5_path):
-                logger.error(f"MT5 initialization failed: {mt5.last_error()}")
+                logger.warning(f"MT5 initialization failed: {mt5.last_error()}. "
+                              "Make sure MT5 terminal is running and accessible.")
+                self.mt5_initialized = False
                 return False
 
-            # Login to account
+            # Try to login to account
             if not mt5.login(self.login, self.password, self.server):
-                logger.error(f"MT5 login failed: {mt5.last_error()}")
+                logger.warning(f"MT5 login failed: {mt5.last_error()}. "
+                              "Check your credentials in .env file.")
+                self.mt5_initialized = False
                 return False
 
-            logger.info(f"MT5 initialized successfully. Account: {mt5.account_info().login}")
-            self.mt5_initialized = True
-            return True
+            account_info = mt5.account_info()
+            if account_info:
+                logger.info(f"MT5 connected successfully. Account: {account_info.login}, Balance: {account_info.balance}")
+                self.mt5_initialized = True
+                return True
+            else:
+                logger.warning("MT5 login succeeded but account info not available")
+                self.mt5_initialized = False
+                return False
 
         except Exception as e:
             logger.error(f"Error initializing MT5: {str(e)}")
+            logger.info("Make sure MT5 terminal is running and the bridge can connect to it")
+            self.mt5_initialized = False
             return False
 
     def get_account_info(self):

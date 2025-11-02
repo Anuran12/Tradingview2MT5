@@ -6,5 +6,6 @@ pytz==2023.3
 werkzeug==2.3.7
 flask-cors==4.0.0
 schedule==1.2.0
-# Note: MetaTrader5 package is Windows-only and should be installed on the host system
-# The bridge will communicate with MT5 via TCP/IP connection
+# Note: MetaTrader5 package requires special installation
+# Uncomment the line below if you want to install MT5 library in container
+MetaTrader5==5.0.45

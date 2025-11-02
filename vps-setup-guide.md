@@ -851,21 +851,51 @@ sudo docker-compose restart mt5-bridge
 
 #### **Fix Webhook Flow (HTTP 404):**
 
-The webhook "tradingview-webhook" is not registered because:
+The webhook is not registered because the n8n workflow needs to be imported and activated:
 
-```bash
-# Access n8n web interface
-# Go to: http://YOUR_VPS_IP:5678
+### **Step-by-Step Webhook Fix:**
 
-# Import the workflow:
-# 1. Go to Workflows → Import from File
-# 2. Upload: n8n-workflows/tradingview-to-mt5-workflow.json
-# 3. Click Import
-# 4. Click the workflow to open it
-# 5. Click "Activate" button (top right)
+1. **Open n8n Web Interface:**
 
-# The webhook URL should be:
-# http://YOUR_VPS_IP:5678/webhook/webhook
+   ```
+   http://YOUR_VPS_IP:5678
+   ```
+
+2. **Import the Workflow:**
+
+   - Click **"Workflows"** in the left sidebar
+   - Click **"Import from File"**
+   - Upload: `n8n-workflows/tradingview-to-mt5-workflow.json`
+   - Click **"Import"**
+
+3. **Activate the Workflow:**
+
+   - Click on the imported workflow to open it
+   - Click the **"Activate"** toggle button (top right corner)
+   - The workflow should show as **"Active"** (green indicator)
+
+4. **Verify Webhook URL:**
+
+   - In the workflow editor, click the **"Webhook Receiver"** node
+   - Copy the webhook URL (should be: `http://YOUR_VPS_IP:5678/webhook/webhook`)
+
+5. **Test the Webhook:**
+   ```bash
+   # Test with a sample signal
+   curl -X POST http://localhost:5678/webhook/webhook \
+     -H "Content-Type: application/json" \
+     -d '{"signal":"BUY","symbol":"EURUSD","lot_size":0.01}'
+   ```
+
+### **Expected Response:**
+
+```json
+{
+  "success": true,
+  "message": "Signal processed successfully",
+  "signal": "BUY",
+  "symbol": "EURUSD"
+}
 ```
 
 #### **Complete Fix Process:**
@@ -896,12 +926,31 @@ curl http://localhost:5000/health
 #   "status": "healthy",
 #   "service": "MT5 Bridge API",
 #   "mt5_connected": false,
-#   "mt5_available": false,
+#   "mt5_available": true,
 #   "timestamp": "2025-11-02T17:55:00.000Z"
 # }
 
 # Run the test again
 python3 test-system.py
+```
+
+### **Adding MT5 Library to Bridge:**
+
+If you want the bridge to actually connect to MT5, you need to include the MT5 library:
+
+```bash
+# Edit requirements to include MT5 library
+nano mt5-bridge/requirements.txt
+# Uncomment: MetaTrader5==5.0.45
+
+# Rebuild with MT5 support
+sudo docker-compose up -d --build mt5-bridge
+
+# Check logs to see MT5 connection status
+sudo docker-compose logs mt5-bridge
+
+# Test account endpoint
+curl http://localhost:5000/account
 ```
 
 ### **Old Issues (Now Fixed):**
