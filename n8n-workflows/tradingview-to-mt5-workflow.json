@@ -4,7 +4,7 @@
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "tradingview-webhook",
+        "path": "webhook",
         "responseMode": "responseNode",
         "options": {}
       },
@@ -12,10 +12,7 @@
       "name": "Webhook Receiver",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [
-        240,
-        300
-      ]
+      "position": [240, 300]
     },
     {
       "parameters": {
@@ -33,59 +30,17 @@
       "name": "Set Timestamp",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.2,
-      "position": [
-        460,
-        300
-      ]
+      "position": [460, 300]
     },
     {
       "parameters": {
-        "jsCode": "const body = $node[\"Webhook Receiver\"].json[\"body\"];
-
-// Parse the message if it's a string (JSON string from TradingView)
-let signalData;
-if (typeof body.message === 'string') {
-  try {
-    signalData = JSON.parse(body.message);
-  } catch (e) {
-    return { error: 'Invalid JSON in message', rawMessage: body.message };
-  }
-} else {
-  signalData = body;
-}
-
-// Validate required fields
-if (!signalData.signal || !['BUY', 'SELL'].includes(signalData.signal.toUpperCase())) {
-  return { error: 'Invalid or missing signal', receivedData: signalData };
-}
-
-if (!signalData.symbol) {
-  return { error: 'Missing symbol', receivedData: signalData };
-}
-
-// Set defaults if not provided
-signalData.lot_size = signalData.lot_size || 0.01;
-signalData.sl_percent = signalData.sl_percent || 1.0;
-signalData.tp_percent = signalData.tp_percent || 2.0;
-
-return {
-  signal: signalData.signal.toUpperCase(),
-  symbol: signalData.symbol.toUpperCase(),
-  lot_size: parseFloat(signalData.lot_size),
-  sl_percent: parseFloat(signalData.sl_percent),
-  tp_percent: parseFloat(signalData.tp_percent),
-  timestamp: signalData.timestamp || new Date().toISOString(),
-  raw_data: signalData
-};"
+        "jsCode": "// Parse TradingView webhook signal\nconst body = $node['Webhook Receiver'].json['body'];\n\nlet signalData;\nif (typeof body.message === 'string') {\n  try {\n    signalData = JSON.parse(body.message);\n  } catch (e) {\n    signalData = body;\n  }\n} else {\n  signalData = body;\n}\n\n// Extract and validate signal\nconst signal = (signalData.signal || signalData.action || 'BUY').toUpperCase();\nconst symbol = (signalData.symbol || 'EURUSD').toUpperCase();\n\n// Validate signal type\nif (!['BUY', 'SELL'].includes(signal)) {\n  return {\n    error: 'Invalid signal type. Must be BUY or SELL',\n    received: signal,\n    data: signalData\n  };\n}\n\nreturn {\n  signal: signal,\n  symbol: symbol,\n  lot_size: parseFloat(signalData.lot_size || 0.01),\n  sl_percent: parseFloat(signalData.sl_percent || 1.0),\n  tp_percent: parseFloat(signalData.tp_percent || 2.0),\n  timestamp: new Date().toISOString()\n};"
       },
       "id": "parse-signal",
       "name": "Parse Signal",
       "type": "n8n-nodes-base.code",
       "typeVersion": 3,
-      "position": [
-        680,
-        300
-      ]
+      "position": [680, 300]
     },
     {
       "parameters": {
@@ -101,10 +56,7 @@ return {
       "name": "Send to MT5 Bridge",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [
-        900,
-        300
-      ]
+      "position": [900, 300]
     },
     {
       "parameters": {
@@ -134,10 +86,7 @@ return {
       "name": "Log Execution",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.2,
-      "position": [
-        1120,
-        300
-      ]
+      "position": [1120, 300]
     },
     {
       "parameters": {
@@ -149,10 +98,7 @@ return {
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [
-        1340,
-        300
-      ]
+      "position": [1340, 300]
     },
     {
       "parameters": {
@@ -164,10 +110,7 @@ return {
       "name": "Check for Errors",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
-      "position": [
-        680,
-        500
-      ]
+      "position": [680, 500]
     },
     {
       "parameters": {
@@ -180,10 +123,7 @@ return {
       "name": "Error Response",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [
-        900,
-        500
-      ]
+      "position": [900, 500]
     }
   ],
   "connections": {

@@ -612,6 +612,101 @@ sudo docker-compose logs -f
 
 **Note:** The MT5 bridge will show warnings about MT5 not being available until you install MT5 on the host system via NoMachine GUI.
 
+---
+
+## 🔄 **Updating Code on VPS**
+
+### **Method 1: Git Repository (Recommended)**
+
+If you have a Git repository (GitHub/GitLab/etc.):
+
+```bash
+# On your local machine - commit and push changes
+cd ~/Tradingview2MT5
+git add .
+git commit -m "Updated workflow and bridge"
+git push origin main
+
+# On your VPS
+cd ~/Tradingview2MT5
+git pull origin main
+
+# Restart services with updated code
+sudo docker-compose down
+sudo docker-compose up -d --build
+```
+
+### **Method 2: Direct File Transfer (SCP)**
+
+```bash
+# From your local machine (Windows Command Prompt or PowerShell)
+scp -r C:\Users\ANURAN\Desktop\Tradingview2MT5/* root@YOUR_VPS_IP:~/Tradingview2MT5/
+
+# Or using rsync (better for updates)
+rsync -avz C:\Users\ANURAN\Desktop\Tradingview2MT5/ root@YOUR_VPS_IP:~/Tradingview2MT5/
+
+# On VPS - restart services
+cd ~/Tradingview2MT5
+sudo docker-compose down
+sudo docker-compose up -d --build
+```
+
+### **Method 3: Using VPS File Manager**
+
+1. **Compress your local folder:**
+
+   ```bash
+   # On Windows: Right-click Tradingview2MT5 folder → Send to → Compressed folder
+   # Or use 7-Zip: 7z a Tradingview2MT5.zip Tradingview2MT5/
+   ```
+
+2. **Upload via VPS control panel:**
+
+   - Go to Hostinger VPS control panel
+   - Use File Manager to upload the ZIP
+   - Extract and replace files
+
+3. **Restart services:**
+   ```bash
+   cd ~/Tradingview2MT5
+   sudo docker-compose down
+   sudo docker-compose up -d --build
+   ```
+
+### **Quick Update Script:**
+
+Create this script on your VPS for easy updates:
+
+```bash
+# Create update script
+nano ~/update-trading-system.sh
+```
+
+```bash
+#!/bin/bash
+echo "🔄 Updating TradingView to MT5 System..."
+
+# Stop services
+cd ~/Tradingview2MT5
+sudo docker-compose down
+
+# Pull latest changes (if using git)
+git pull origin main 2>/dev/null || echo "No git repo found, using local files"
+
+# Rebuild and start
+sudo docker-compose up -d --build
+
+# Check status
+echo "✅ Update complete!"
+sudo docker-compose ps
+```
+
+```bash
+# Make executable and run
+chmod +x ~/update-trading-system.sh
+~/update-trading-system.sh
+```
+
 ### Step 4.2: Verify Services Health
 
 ```bash
@@ -642,7 +737,7 @@ sudo docker ps
 
    - Open the imported workflow
    - Click on the "Webhook Receiver" node
-   - Copy the webhook URL (should look like: `http://YOUR_VPS_IP:5678/webhook/tradingview-webhook`)
+   - Copy the webhook URL (should look like: `http://YOUR_VPS_IP:5678/webhook/webhook`)
 
 4. **Activate Workflow:**
    - Click "Activate" button (top right)
@@ -692,7 +787,7 @@ The strategy file is already updated: `tradingview/moving-averages-strategy.pine
 
    - Click "Alert" button (bell icon) on chart
    - Condition: "Long Signal"
-   - Webhook URL: `http://YOUR_VPS_IP:5678/webhook/tradingview-webhook`
+   - Webhook URL: `http://YOUR_VPS_IP:5678/webhook/webhook`
    - Message: Leave empty (strategy generates JSON)
    - Frequency: "Once per bar"
 
@@ -970,7 +1065,7 @@ curl http://localhost:5678/rest/workflows
 docker-compose logs n8n
 
 # Test webhook manually
-curl -X POST http://localhost:5678/webhook/tradingview-webhook -d '{"test": "data"}'
+curl -X POST http://localhost:5678/webhook/webhook -d '{"test": "data"}'
 ```
 
 **3. Docker Issues:**
@@ -1016,7 +1111,7 @@ echo -e "\n3. MT5 Connection:"
 curl -s http://localhost:5000/account | jq '.balance' 2>/dev/null && echo " ✅ MT5 Account OK" || echo " ❌ MT5 Account FAIL"
 
 echo -e "\n4. Webhook Test:"
-curl -s -X POST http://localhost:5678/webhook/tradingview-webhook \
+curl -s -X POST http://localhost:5678/webhook/webhook \
   -H "Content-Type: application/json" \
   -d '{"signal":"BUY","symbol":"EURUSD","lot_size":0.01}' && echo " ✅ Webhook OK" || echo " ❌ Webhook FAIL"
 

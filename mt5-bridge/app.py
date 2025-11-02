@@ -132,7 +132,7 @@ class MT5Bridge:
     def open_position(self, direction, symbol, lot_size, sl_price=None, tp_price=None, comment=""):
         """Open a trading position"""
         if not self.mt5_initialized:
-            return {'success': False, 'error': 'MT5 not initialized'}
+            return {'success': False, 'error': 'MT5 not initialized', 'mt5_status': 'disconnected'}
 
         try:
             # Get current prices
@@ -376,6 +376,15 @@ def tradingview_webhook():
         logger.error(f"Error processing webhook: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/webhook/tradingview', methods=['GET'])
+def test_webhook():
+    """Test endpoint for webhook connectivity"""
+    return jsonify({
+        'status': 'MT5 Bridge is running',
+        'mt5_connected': mt5_bridge.mt5_initialized,
+        'timestamp': datetime.now(timezone.utc).isoformat()
+    }), 200
+
 @app.route('/positions', methods=['GET'])
 def get_positions():
     """Get current positions"""
@@ -400,6 +409,37 @@ def get_symbol(symbol):
         return jsonify(symbol_info), 200
     else:
         return jsonify({'error': f'Symbol {symbol} not found'}), 404
+
+@app.route('/history', methods=['GET'])
+def get_trade_history():
+    """Get recent trade history"""
+    try:
+        # Get last 100 deals
+        deals = mt5.history_deals_get("", 0, 100) if mt5_bridge.mt5_initialized else []
+
+        if deals:
+            history = [{
+                'ticket': deal.ticket,
+                'symbol': deal.symbol,
+                'type': 'BUY' if deal.type == 0 else 'SELL',  # DEAL_TYPE_BUY = 0, DEAL_TYPE_SELL = 1
+                'volume': deal.volume,
+                'price': deal.price,
+                'profit': deal.profit,
+                'time': deal.time,
+                'comment': deal.comment
+            } for deal in deals]
+            return jsonify({'history': history}), 200
+        else:
+            return jsonify({'history': [], 'message': 'No trade history available'}), 200
+
+    except Exception as e:
+        logger.error(f"Error getting trade history: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/ping', methods=['GET'])
+def ping():
+    """Simple ping endpoint for health checks"""
+    return jsonify({'status': 'pong', 'timestamp': datetime.now(timezone.utc).isoformat()}), 200
 
 if __name__ == '__main__':
     port = int(os.getenv('BRIDGE_PORT', 5000))
