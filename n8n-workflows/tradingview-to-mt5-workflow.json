@@ -1,0 +1,266 @@
+{
+  "name": "TradingView to MT5 Bridge",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "tradingview-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-receiver",
+      "name": "Webhook Receiver",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "timestamp",
+              "value": "={{ new Date().toISOString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-timestamp",
+      "name": "Set Timestamp",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $node[\"Webhook Receiver\"].json[\"body\"];
+
+// Parse the message if it's a string (JSON string from TradingView)
+let signalData;
+if (typeof body.message === 'string') {
+  try {
+    signalData = JSON.parse(body.message);
+  } catch (e) {
+    return { error: 'Invalid JSON in message', rawMessage: body.message };
+  }
+} else {
+  signalData = body;
+}
+
+// Validate required fields
+if (!signalData.signal || !['BUY', 'SELL'].includes(signalData.signal.toUpperCase())) {
+  return { error: 'Invalid or missing signal', receivedData: signalData };
+}
+
+if (!signalData.symbol) {
+  return { error: 'Missing symbol', receivedData: signalData };
+}
+
+// Set defaults if not provided
+signalData.lot_size = signalData.lot_size || 0.01;
+signalData.sl_percent = signalData.sl_percent || 1.0;
+signalData.tp_percent = signalData.tp_percent || 2.0;
+
+return {
+  signal: signalData.signal.toUpperCase(),
+  symbol: signalData.symbol.toUpperCase(),
+  lot_size: parseFloat(signalData.lot_size),
+  sl_percent: parseFloat(signalData.sl_percent),
+  tp_percent: parseFloat(signalData.tp_percent),
+  timestamp: signalData.timestamp || new Date().toISOString(),
+  raw_data: signalData
+};"
+      },
+      "id": "parse-signal",
+      "name": "Parse Signal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 3,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://mt5-bridge:5000/webhook/tradingview",
+        "sendBody": true,
+        "bodyContentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"signal\": $node[\"Parse Signal\"].json[\"signal\"],\n  \"symbol\": $node[\"Parse Signal\"].json[\"symbol\"],\n  \"lot_size\": $node[\"Parse Signal\"].json[\"lot_size\"],\n  \"sl_percent\": $node[\"Parse Signal\"].json[\"sl_percent\"],\n  \"tp_percent\": $node[\"Parse Signal\"].json[\"tp_percent\"],\n  \"timestamp\": $node[\"Parse Signal\"].json[\"timestamp\"]\n} }}",
+        "options": {}
+      },
+      "id": "send-to-mt5",
+      "name": "Send to MT5 Bridge",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "webhook_received",
+              "value": "={{ new Date().toISOString() }}"
+            },
+            {
+              "name": "signal_processed",
+              "value": "={{ $node[\"Parse Signal\"].json[\"signal\"] || 'ERROR' }}"
+            },
+            {
+              "name": "symbol",
+              "value": "={{ $node[\"Parse Signal\"].json[\"symbol\"] || 'UNKNOWN' }}"
+            },
+            {
+              "name": "mt5_response",
+              "value": "={{ $node[\"Send to MT5 Bridge\"].json }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "log-execution",
+      "name": "Log Execution",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $node[\"Log Execution\"].json }}",
+        "options": {}
+      },
+      "id": "respond-to-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "passThrough",
+        "output": "={{ $node[\"Parse Signal\"].json[\"error\"] ? false : true }}",
+        "options": {}
+      },
+      "id": "check-for-errors",
+      "name": "Check for Errors",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        680,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": false, \"error\": $node[\"Parse Signal\"].json[\"error\"], \"timestamp\": new Date().toISOString() } }}",
+        "responseCode": 400,
+        "options": {}
+      },
+      "id": "error-response",
+      "name": "Error Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        900,
+        500
+      ]
+    }
+  ],
+  "connections": {
+    "webhook-receiver": {
+      "main": [
+        [
+          {
+            "node": "set-timestamp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "set-timestamp": {
+      "main": [
+        [
+          {
+            "node": "parse-signal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "parse-signal": {
+      "main": [
+        [
+          {
+            "node": "check-for-errors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check-for-errors": {
+      "main": [
+        [
+          {
+            "node": "send-to-mt5",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "error-response",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "send-to-mt5": {
+      "main": [
+        [
+          {
+            "node": "log-execution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "log-execution": {
+      "main": [
+        [
+          {
+            "node": "respond-to-webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "staticData": null
+}

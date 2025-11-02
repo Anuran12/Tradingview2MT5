@@ -1,0 +1,10 @@
+Flask==2.3.3
+MetaTrader5==5.0.45
+requests==2.31.0
+python-dotenv==1.0.0
+apscheduler==3.10.4
+pytz==2023.3
+logging==0.4.9.6
+werkzeug==2.3.7
+flask-cors==4.0.0
+schedule==1.2.0

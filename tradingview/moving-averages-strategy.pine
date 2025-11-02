@@ -1,0 +1,169 @@
+//@version=5
+strategy("Moving Averages Strategy - Webhook Alerts", overlay=true)
+
+// Input for source and periods
+src = input(close, title="Source")
+period1 = input(20, title="1st MA Period")
+period2 = input(50, title="2nd MA Period")
+
+// Moving Average Type Selection
+maType1 = input.string("SMA", "1st MA Type", options=["SMA", "EMA", "TEMA", "HMA", "KAMA", "ALMA", "FRAMA", "VIDYA"])
+maType2 = input.string("EMA", "2nd MA Type", options=["SMA", "EMA", "TEMA", "HMA", "KAMA", "ALMA", "FRAMA", "VIDYA"])
+
+// TP and SL Settings
+takeProfitPercent = input(2.0, title="Take Profit (%)")
+stopLossPercent = input(1.0, title="Stop Loss (%)")
+
+// Trading Parameters for Webhook
+lotSize = input(0.01, title="Lot Size")
+symbol = input("EURUSD", title="Trading Symbol")
+
+// Custom Moving Average Functions
+
+// TEMA - Triple Exponential Moving Average
+tema(src, length) =>
+    ema1 = ta.ema(src, length)
+    ema2 = ta.ema(ema1, length)
+    ema3 = ta.ema(ema2, length)
+    3 * ema1 - 3 * ema2 + ema3
+
+// HMA - Hull Moving Average
+hma(src, length) =>
+    wma1 = ta.wma(src, math.round(length / 2))
+    wma2 = ta.wma(src, length)
+    rawHMA = 2 * wma1 - wma2
+    ta.wma(rawHMA, math.round(math.sqrt(length)))
+
+// KAMA - Kaufman's Adaptive Moving Average
+kama(src, length, fastLength, slowLength) =>
+    change = math.abs(src - src[length])
+    volatility = math.sum(math.abs(src - src[1]), length)
+    er = volatility != 0 ? change / volatility : 0
+
+    fastSC = 2 / (fastLength + 1)
+    slowSC = 2 / (slowLength + 1)
+    sc = er * (fastSC - slowSC) + slowSC
+    sc := sc * sc
+
+    kama = 0.0
+    kama := nz(kama[1], src) + sc * (src - nz(kama[1], src))
+
+// ALMA - Arnaud Legoux Moving Average
+alma(src, length, offset, sigma) =>
+    m = offset * (length - 1)
+    s = length / sigma
+    sum = 0.0
+    sumW = 0.0
+
+    for i = 0 to length - 1
+        weight = math.exp(-((i - m) * (i - m)) / (2 * s * s))
+        sum := sum + src[length - 1 - i] * weight
+        sumW := sumW + weight
+
+    sumW != 0 ? sum / sumW : src
+
+// FRAMA - Fractal Adaptive Moving Average
+frama(src, length) =>
+    // Calculate fractal dimension
+    n1 = (ta.highest(src, length) - ta.lowest(src, length)) / length
+    n2 = (ta.highest(src, length / 2) - ta.lowest(src, length / 2)) / (length / 2)
+    n3 = (ta.highest(src, length / 2) - ta.lowest(src, length / 2)) / (length / 2)
+
+    // Calculate fractal dimension
+    dimen = (math.log(n1 + n2) - math.log(n3)) / math.log(2)
+
+    // Calculate smoothing factor
+    alpha = math.exp(-4.6 * (dimen - 1))
+    alpha := alpha < 0.01 ? 0.01 : alpha > 1 ? 1 : alpha
+
+    // Calculate FRAMA
+    frama = 0.0
+    frama := nz(frama[1], src) + alpha * (src - nz(frama[1], src))
+
+// VIDYA - Variable Index Dynamic Average
+vidya(src, length) =>
+    // Calculate volatility
+    volatility = ta.stdev(src, length)
+    avgVolatility = ta.sma(volatility, length)
+
+    // Calculate CMO (Chande Momentum Oscillator) for VIDYA
+    up = 0.0
+    down = 0.0
+
+    for i = 1 to length
+        if src[i] > src[i+1]
+            up := up + src[i] - src[i+1]
+        else
+            down := down + src[i+1] - src[i]
+
+    cmo = up + down != 0 ? (up - down) / (up + down) * 100 : 0
+    absCmo = math.abs(cmo) / 100
+
+    // Calculate VIDYA
+    vidya = 0.0
+    vidya := nz(vidya[1], src) + absCmo * 2 / (length + 1) * (src - nz(vidya[1], src))
+
+// JMA - Jurik Moving Average (Simplified approximation)
+jma(src, length, power) =>
+    jmaVal = 0.0
+    jmaVal := nz(jmaVal[1], src) + power * (src - nz(jmaVal[1], src)) / length
+    jmaVal
+
+// Main Moving Average Calculation Function
+ma(src, length, type) =>
+    result = ta.sma(src, length)
+    if type == "SMA"
+        result := ta.sma(src, length)
+    if type == "EMA"
+        result := ta.ema(src, length)
+    if type == "TEMA"
+        result := tema(src, length)
+    if type == "HMA"
+        result := hma(src, length)
+    if type == "KAMA"
+        result := kama(src, length, 2, 30)
+    if type == "ALMA"
+        result := alma(src, length, 0.85, 6)
+    if type == "FRAMA"
+        result := frama(src, length)
+    if type == "VIDYA"
+        result := vidya(src, length)
+    if type == "JMA"
+        result := jma(src, length, 2)
+    result
+
+// Calculate the two moving averages
+price1 = ma(src, period1, maType1)
+price2 = ma(src, period2, maType2)
+
+// Plot the moving averages
+plot(price1, title="1st MA", color=color.blue, linewidth=2, style=plot.style_line)
+plot(price2, title="2nd MA", color=color.green, linewidth=2, style=plot.style_line)
+
+// Trading logic
+longCondition = ta.crossover(price1, price2)
+shortCondition = ta.crossunder(price1, price2)
+
+// Alert conditions for webhooks with structured JSON messages
+longMessage = '{"signal":"BUY","symbol":"' + symbol + '","lot_size":' + str.tostring(lotSize) + ',"sl_percent":' + str.tostring(stopLossPercent) + ',"tp_percent":' + str.tostring(takeProfitPercent) + ',"timestamp":' + str.tostring(time) + '}'
+shortMessage = '{"signal":"SELL","symbol":"' + symbol + '","lot_size":' + str.tostring(lotSize) + ',"sl_percent":' + str.tostring(stopLossPercent) + ',"tp_percent":' + str.tostring(takeProfitPercent) + ',"timestamp":' + str.tostring(time) + '}'
+
+alertcondition(longCondition, title="Long Signal", message=longMessage)
+alertcondition(shortCondition, title="Short Signal", message=shortMessage)
+
+// Strategy entries (for backtesting only)
+if (longCondition)
+    strategy.entry("Long", strategy.long)
+    // Calculate TP and SL prices for long position
+    takeProfitPrice = close * (1 + takeProfitPercent / 100)
+    stopLossPrice = close * (1 - stopLossPercent / 100)
+    // Set TP and SL for long position
+    strategy.exit("Long Exit", from_entry="Long", limit=takeProfitPrice, stop=stopLossPrice)
+
+if (shortCondition)
+    strategy.entry("Short", strategy.short)
+    // Calculate TP and SL prices for short position
+    takeProfitPrice = close * (1 - takeProfitPercent / 100)
+    stopLossPrice = close * (1 + stopLossPercent / 100)
+    // Set TP and SL for short position
+    strategy.exit("Short Exit", from_entry="Short", limit=takeProfitPrice, stop=stopLossPrice)
