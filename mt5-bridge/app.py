@@ -10,10 +10,18 @@ import time
 from datetime import datetime, timezone
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import MetaTrader5 as mt5
-from dotenv import load_load
+from dotenv import load_dotenv
 import json
 import threading
+
+# Try to import MetaTrader5 - it may not be available in container
+try:
+    import MetaTrader5 as mt5
+    MT5_AVAILABLE = True
+except ImportError:
+    MT5_AVAILABLE = False
+    logging.warning("MetaTrader5 package not available. Make sure MT5 is running on the host system.")
+    mt5 = None
 
 # Load environment variables
 load_dotenv()
@@ -50,6 +58,14 @@ class MT5Bridge:
 
     def initialize_mt5(self):
         """Initialize MT5 connection"""
+        if not MT5_AVAILABLE:
+            logger.warning("MetaTrader5 package not available in container. "
+                          "Make sure MT5 terminal is running on the host system with API access enabled.")
+            # For now, we'll assume MT5 is running and available via network
+            # In production, you might want to implement a TCP/IP connection to host MT5
+            self.mt5_initialized = False
+            return False
+
         try:
             # Initialize MT5
             if not mt5.initialize(path=self.mt5_path):

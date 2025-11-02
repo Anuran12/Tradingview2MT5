@@ -1,6 +1,6 @@
 # 🚀 Complete VPS Setup Guide: TradingView to MT5 Automated System
 
-**Hostinger VPS + Ubuntu + TradingView + n8n + MT5**
+**Hostinger VPS + Ubuntu + NoMachine GUI + TradingView + n8n + MT5**
 
 ---
 
@@ -16,7 +16,50 @@ Before starting, ensure you have:
 
 ---
 
-## 🎯 Phase 1: VPS Initial Setup
+## 🧹 **CLEAN RESTART: Wipe Everything and Start Fresh**
+
+If you want to start over completely (recommended if having issues):
+
+### **⚠️ WARNING: This will delete everything on your VPS**
+
+```bash
+# BACKUP ANY IMPORTANT DATA FIRST (if any exists)
+
+# Complete system reset (run as root)
+sudo rm -rf /home/*
+sudo rm -rf /opt/*
+sudo rm -rf /var/lib/docker
+sudo apt purge -y docker* nomachine* wine* xfce4* lightdm*
+sudo apt autoremove -y
+sudo apt autoclean
+
+# Reset firewall
+sudo ufw --force reset
+sudo ufw enable
+sudo ufw allow ssh
+sudo ufw allow 4000:4100/tcp  # NoMachine port range
+
+# Reboot to clean state
+sudo reboot
+```
+
+### **After Reboot: Fresh Start with GUI Priority**
+
+---
+
+## 🎯 **NEW ORDER: GUI First, Then Everything Else**
+
+**Recommended sequence for smooth setup:**
+
+1. ✅ **Basic VPS setup** (repositories, tools)
+2. 🎯 **NoMachine GUI setup** (FIRST PRIORITY)
+3. 🐳 **Docker & Trading System**
+4. 📊 **MT5 Installation** (through GUI)
+5. ⚙️ **Configuration & Testing**
+
+---
+
+## 🎯 Phase 1: VPS Basic Setup
 
 ### Step 1.1: Connect to Your VPS
 
@@ -55,6 +98,9 @@ sudo ufw enable
 sudo ufw allow ssh
 sudo ufw allow 22
 
+# Allow NoMachine ports (FIRST PRIORITY)
+sudo ufw allow 4000:4100/tcp
+
 # Allow required ports for trading system
 sudo ufw allow 80
 sudo ufw allow 443
@@ -79,6 +125,10 @@ sudo ufw status
 # Create the trading user (interactive - you'll be prompted for password)
 sudo adduser trading
 
+# If user already exists (from previous attempts), skip creation and just configure
+# sudo usermod -aG sudo trading  # Add to sudo group
+# su - trading                  # Switch to user
+
 # Add trading user to sudo group for admin privileges
 sudo usermod -aG sudo trading
 
@@ -100,6 +150,12 @@ whoami  # Should show "trading"
 sudo whoami  # Should show "root" without password prompt
 ```
 
+**If you see "user 'trading' already exists":**
+
+- The user was created in a previous attempt
+- Just run: `sudo usermod -aG sudo trading && su - trading`
+- Then configure sudo with `sudo visudo`
+
 **Alternative: Stay as root (not recommended)**
 If you prefer to skip this step, you can continue as root, but you'll need to adjust file permissions later.
 
@@ -111,9 +167,169 @@ If you prefer to skip this step, you can continue as root, but you'll need to ad
 
 ---
 
-## 🐳 Phase 2: Docker Installation
+## 🖥️ **Phase 2: NoMachine GUI Setup (FIRST PRIORITY)**
 
-### Step 2.1: Install Docker
+### **Why GUI First?**
+
+- MT5 installation requires GUI access
+- Wine setup and testing needs GUI
+- Much easier to troubleshoot with visual interface
+
+### Step 2.1: Install NoMachine Server
+
+```bash
+# Clean up any Wine repository issues first (if you see Wine errors)
+sudo rm -f /etc/apt/sources.list.d/wine*
+sudo rm -f /etc/apt/keyrings/wine*
+
+# Update system first
+sudo apt update && sudo apt upgrade -y
+
+# Download latest NoMachine for Ubuntu (working URL)
+wget https://www.nomachine.com/free/linux/64/deb -O nomachine.deb
+
+# Alternative working URL if the above doesn't work:
+# wget https://download.nomachine.com/download/8.10/Linux/nomachine_8.10.1_1_amd64.deb -O nomachine.deb
+
+# Install NoMachine
+sudo dpkg -i nomachine.deb
+
+# Fix any dependencies
+sudo apt install -f -y
+
+# Clean up
+rm nomachine.deb
+```
+
+### Step 2.2: Install Desktop Environment
+
+**Choose Your Desktop Environment:**
+
+#### **Option A: XFCE (Lightweight - Recommended for VPS)**
+
+```bash
+# Install lightweight XFCE desktop
+sudo apt install -y xfce4 xfce4-goodies xfce4-terminal
+
+# Install display manager
+sudo apt install -y lightdm lightdm-gtk-greeter
+
+# Install additional GUI tools
+sudo apt install -y firefox mousepad xarchiver
+```
+
+#### **Option B: MATE (Traditional GNOME-like, Very Stable)**
+
+```bash
+# Install MATE desktop (more familiar interface)
+sudo apt install -y ubuntu-mate-desktop^
+
+# Or minimal MATE
+sudo apt install -y mate-desktop-environment mate-terminal
+sudo apt install -y lightdm firefox mousepad
+```
+
+#### **Option C: Cinnamon (Modern, Feature-Rich)**
+
+```bash
+# Install Cinnamon desktop
+sudo apt install -y cinnamon-desktop-environment
+sudo apt install -y lightdm firefox mousepad
+```
+
+#### **Option D: KDE Plasma (Full-Featured, Modern)**
+
+```bash
+# Install KDE Plasma
+sudo apt install -y kubuntu-desktop^
+# OR for minimal KDE:
+sudo apt install -y plasma-desktop sddm firefox konsole
+```
+
+#### **Option E: GNOME (Full Ubuntu Experience)**
+
+```bash
+# Install full GNOME desktop
+sudo apt install -y ubuntu-gnome-desktop^
+
+# Or minimal GNOME
+sudo apt install -y gnome-session gdm3 firefox gnome-terminal
+```
+
+## 🎯 **Recommendations:**
+
+- **For VPS (2-4GB RAM):** XFCE or MATE (lightweight)
+- **For VPS (4GB+ RAM):** Cinnamon or KDE Plasma
+- **For Best Experience:** MATE (stable, familiar, lightweight)
+
+**My Recommendation: Use MATE** - it's stable, looks professional, and works great for remote desktop trading.
+
+```bash
+# Best choice for trading VPS
+sudo apt install -y ubuntu-mate-desktop^
+sudo apt install -y firefox mousepad
+```
+
+### Step 2.3: Configure Desktop Environment
+
+**Configuration depends on your chosen desktop:**
+
+#### **For MATE:**
+
+```bash
+# Set MATE as default desktop
+sudo update-alternatives --config x-session-manager
+
+# Create desktop configuration
+sudo mkdir -p /home/trading/.config/mate
+sudo chown -R trading:trading /home/trading/.config
+
+# Set MATE session
+echo "mate-session" > /home/trading/.xsession
+sudo chown trading:trading /home/trading/.xsession
+```
+
+### Step 2.4: Start Services and Test
+
+```bash
+# Start display manager
+sudo systemctl start lightdm
+sudo systemctl enable lightdm
+
+# Check NoMachine status
+sudo systemctl status nxserver
+
+# Get your VPS IP for NoMachine connection
+curl -s ifconfig.me
+```
+
+### Step 2.5: Connect via NoMachine
+
+**On your local machine:**
+
+1. **Download NoMachine client** from https://www.nomachine.com/download
+2. **Install and open** NoMachine
+3. **Create new connection:**
+   - **Host:** `YOUR_VPS_IP`
+   - **Login:** `trading` (or `root` if no trading user yet)
+   - **Password:** your user password
+4. **Connect** - you should see the XFCE desktop
+
+### Step 2.6: Test GUI Functionality
+
+**In NoMachine GUI:**
+
+1. **Open Terminal** - Applications → System → Terminal
+2. **Open Firefox** - Applications → Internet → Firefox
+3. **Test GUI responsiveness**
+
+**Expected Result:** Full Ubuntu desktop with XFCE environment
+
+---
+
+## 🐳 Phase 3: Docker Installation
+
+### Step 3.1: Install Docker
 
 ```bash
 # Update package index
@@ -140,7 +356,7 @@ sudo systemctl enable docker
 sudo usermod -aG docker trading
 ```
 
-### Step 2.2: Install Docker Compose
+### Step 3.2: Install Docker Compose
 
 ```bash
 # Download Docker Compose
@@ -154,7 +370,7 @@ docker-compose --version
 docker --version
 ```
 
-### Step 2.3: Test Docker Installation
+### Step 3.3: Test Docker Installation
 
 ```bash
 # Test Docker
@@ -166,9 +382,9 @@ sudo docker-compose --version
 
 ---
 
-## 📁 Phase 3: Trading System Setup
+## 📁 Phase 4: Trading System Setup
 
-### Step 3.1: Download Project Files
+### Step 4.1: Download Project Files
 
 ```bash
 # Navigate to home directory
@@ -182,7 +398,7 @@ cd Tradingview2MT5
 chmod +x deploy.sh
 ```
 
-### Step 3.2: Configure Environment Variables
+### Step 4.2: Configure Environment Variables
 
 ```bash
 # Copy environment template
@@ -213,22 +429,122 @@ LOG_LEVEL=INFO
 
 ### Step 3.3: Download and Install MetaTrader 5
 
+**⚠️ IMPORTANT: MT5 Installation Requires GUI Access**
+
+MT5 requires a graphical desktop environment to install and run. You cannot install it through a terminal-only connection.
+
+#### **Option A: Use NoMachine (Recommended)**
+
+1. **Install NoMachine on your VPS:**
+
 ```bash
-# Create MT5 directory
+# Go to home directory (where you can write files)
+cd ~
+
+# Download NoMachine for Ubuntu (use the correct URL)
+wget https://www.nomachine.com/free/linux/64/deb -O nomachine.deb
+
+# Alternative: Direct download with correct version
+# wget https://download.nomachine.com/download/8.10/Linux/nomachine_8.10.1_1_amd64.deb
+
+# Install it
+sudo dpkg -i nomachine.deb
+
+# Fix any dependencies
+sudo apt install -f -y
+
+# Clean up
+rm nomachine.deb
+```
+
+2. **Install Desktop Environment:**
+
+```bash
+# Install lightweight desktop
+sudo apt install -y xfce4 xfce4-goodies
+
+# Install display manager
+sudo apt install -y lightdm
+
+# Set default desktop
+echo "/usr/bin/xfce4-session" > ~/.xsession
+```
+
+3. **Configure NoMachine:**
+
+- Connect using NoMachine client on your local machine
+- Use VPS IP, username: `trading`, password: your trading user password
+- Install MT5 through the graphical interface
+
+#### **Option B: Use X11 Forwarding (Alternative)**
+
+```bash
+# On your local machine (Windows/Mac/Linux):
+ssh -X trading@YOUR_VPS_IP
+
+# Then try Wine commands
+# (May still have issues with display)
+```
+
+#### **MT5 Installation Steps (Once You Have GUI Access):**
+
+```bash
+# Create MT5 directory and set permissions
 sudo mkdir -p /opt/mt5
+sudo chown trading:trading /opt/mt5
 cd /opt/mt5
 
-# Download MT5 for Linux
+# Download MT5 (correct URL - note the dot, not comma)
 wget https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe
 
-# Note: MT5 for Linux requires Wine. Let's install Wine first
-sudo apt install -y wine winetricks
+# Install Wine dependencies (complete reinstall if needed)
+sudo dpkg --add-architecture i386
+sudo apt update
 
-# Initialize Wine for MT5
+# If Wine is broken, remove and reinstall
+sudo apt remove --purge wine* -y
+sudo apt autoremove -y
+sudo apt install -y wine winetricks wine32:i386
+
+# Verify Wine installation
+wine --version
+
+# Initialize Wine for 32-bit (MT5 requires 32-bit)
+# Remove existing 64-bit prefix if it exists
+rm -rf ~/.wine
+
+# Create 32-bit Wine prefix
+WINEARCH=win32 WINEPREFIX=~/.wine winecfg
+
+# Accept the Wine configuration wizard
+# This creates the necessary 32-bit Wine environment
+
+# Alternative: Use wine32 directly
+# wine32 winecfg
+
+# Now run MT5 setup
 wine mt5setup.exe
 
 # Follow the installation wizard
-# Install MT5 in /opt/mt5 directory
+# Install to C:\Program Files\MetaTrader 5 (default)
+# The actual files will be in ~/.wine/drive_c/Program Files/MetaTrader 5
+
+# If you get "Bad EXE format" error:
+# 1. The direct download is being blocked/filtered
+# 2. Use browser download method instead (see below)
+# 3. Download from official MetaTrader website through GUI
+
+#### **BEST METHOD: Browser Download (Most Reliable)**
+
+Since direct downloads are failing, use your NoMachine GUI:
+
+1. **Open Firefox/Chrome** in NoMachine
+2. **Go to:** https://www.metatrader5.com/en/download
+3. **Click "Download MetaTrader 5"** for Windows version
+4. **Save the file** to your `/opt/mt5/` directory
+5. **Run:** `wine /opt/mt5/mt5setup.exe`
+
+**Expected file size:** 100-150 MB (not 23MB like the corrupted downloads)
 ```
 
 ### Step 3.4: Configure MT5 for API Access
@@ -259,9 +575,26 @@ wine terminal64.exe &
 
 ---
 
-## 🚀 Phase 4: Deploy Trading System
+## 🚀 Phase 5: Deploy Trading System
 
-### Step 4.1: Build and Start Services
+### Step 5.1: Build and Start Services
+
+**⚠️ IMPORTANT: Configure MT5 credentials first!**
+
+Before running Docker, make sure your MT5 credentials are configured:
+
+```bash
+# Edit the MT5 bridge environment file
+nano mt5-bridge/.env
+
+# Fill in your MT5 details (get these from your broker):
+# MT5_LOGIN=your_account_number
+# MT5_PASSWORD=your_password
+# MT5_SERVER=your_broker_server
+# MT5_PATH=/opt/mt5
+```
+
+**Then start the services:**
 
 ```bash
 # Make sure you're in the project directory
@@ -276,6 +609,8 @@ sudo docker-compose ps
 # View logs to check for errors
 sudo docker-compose logs -f
 ```
+
+**Note:** The MT5 bridge will show warnings about MT5 not being available until you install MT5 on the host system via NoMachine GUI.
 
 ### Step 4.2: Verify Services Health
 
@@ -315,9 +650,9 @@ sudo docker ps
 
 ---
 
-## 🎯 Phase 5: TradingView Configuration
+## 🎯 Phase 6: TradingView Configuration
 
-### Step 5.1: Prepare Pine Script Strategy
+### Step 6.1: Prepare Pine Script Strategy
 
 The strategy file is already updated: `tradingview/moving-averages-strategy.pine`
 
@@ -332,7 +667,7 @@ The strategy file is already updated: `tradingview/moving-averages-strategy.pine
 - `lotSize`: 0.01
 - `symbol`: EURUSD
 
-### Step 5.2: Add Strategy to TradingView
+### Step 6.2: Add Strategy to TradingView
 
 1. **Open TradingView:**
 
@@ -351,7 +686,7 @@ The strategy file is already updated: `tradingview/moving-averages-strategy.pine
    - Adjust parameters as needed
    - Ensure it's showing BUY/SELL signals
 
-### Step 5.3: Create TradingView Alerts
+### Step 6.3: Create TradingView Alerts
 
 1. **Create BUY Alert:**
 
@@ -371,9 +706,9 @@ The strategy file is already updated: `tradingview/moving-averages-strategy.pine
 
 ---
 
-## 🔧 Phase 6: System Testing
+## 🔧 Phase 7: System Testing
 
-### Step 6.1: Run System Tests
+### Step 7.1: Run System Tests
 
 ```bash
 # Run the test script
@@ -424,9 +759,9 @@ sudo docker-compose logs -f mt5-bridge
 
 ---
 
-## 🌐 Phase 7: Production Setup
+## 🌐 Phase 8: Production Setup
 
-### Step 7.1: Install Nginx (Reverse Proxy)
+### Step 8.1: Install Nginx (Reverse Proxy)
 
 ```bash
 # Install Nginx
@@ -551,7 +886,7 @@ sudo nano /etc/logrotate.d/trading-system
 
 ---
 
-## 🔄 Phase 8: Backup & Recovery
+## 🔄 Phase 9: Backup & Recovery
 
 ### Step 8.1: Automated Backups
 
@@ -608,7 +943,7 @@ crontab -e
 
 ---
 
-## 🚨 Phase 9: Troubleshooting
+## 🚨 Phase 10: Troubleshooting
 
 ### Common Issues & Solutions
 
@@ -660,7 +995,7 @@ docker system prune -f
 
 ---
 
-## 📊 Phase 10: Final Verification
+## 📊 Phase 11: Final Verification
 
 ### Complete System Check
 
